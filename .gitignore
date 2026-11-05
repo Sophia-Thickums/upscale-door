@@ -1,0 +1,5 @@
+payload/
+*.zip
+*.pak
+.cache/
+__pycache__/
