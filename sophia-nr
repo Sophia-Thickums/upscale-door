@@ -1,0 +1,58 @@
+#!/bin/bash
+# sophia-nr — launch a NON-STEAM Windows game under Proton with the DLSS-5 neural-rendering stack.
+#
+# Steam games get this from a launch option. Everything else needs a wrapper, and this is it: the same
+# environment linux/launch.sh arranges, applied to a game that Steam has never heard of.
+#
+#   sophia-nr <folder-with-exe> <exe-name>
+#
+# Why each piece is here (all measured 2026-11-05):
+#   LD_LIBRARY_PATH + LD_PRELOAD by NAME — ld.so splits LD_PRELOAD on spaces, and game folders have
+#     spaces in their names, so a full path is silently taken for several libraries.
+#   DLSSNR_HIP_LIB — "cuInit failed: 801" means the bridge could not see libamdhip64.so.7. The host has
+#     it; the container only sees what it is told.
+#   PROTON_DISABLE_NVAPI + WINEDLLOVERRIDES nvcuda=n — Proton sets nvcuda=b AFTER us when NVAPI is on,
+#     and then Wine's CUDA stub answers instead of the plugin's ZLUDA.
+#   WINEDLLOVERRIDES dxgi=n,b — without it Wine loads its own dxgi and no proxy is ever loaded.
+set -uo pipefail
+
+DIR="${1:?usage: sophia-nr <folder> <exe>}"
+EXE="${2:?usage: sophia-nr <folder> <exe>}"
+DIR=$(readlink -f "$DIR")
+PROTON="$HOME/.local/share/Steam/compatibilitytools.d/GE-Proton11-7-x86_64/proton"
+PREFIX="${SOPHIA_NR_PREFIX:-$DIR/prefix}"
+LOG="$HOME/logs/games/$(basename "$EXE" .exe)-$(date +%Y%m%d-%H%M%S).log"
+mkdir -p "$HOME/logs/games" "$PREFIX"
+
+[ -x "$PROTON" ] || { echo "no proton at $PROTON" >&2; exit 1; }
+[ -f "$DIR/$EXE" ] || { echo "no $EXE in $DIR" >&2; exit 1; }
+
+export STEAM_COMPAT_DATA_PATH="$PREFIX"
+export STEAM_COMPAT_CLIENT_INSTALL_PATH="$HOME/.local/share/Steam"
+export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-1}"
+export XDG_RUNTIME_DIR=/run/user/1000
+export XDG_SESSION_TYPE=wayland
+export DISPLAY="${DISPLAY:-:0}"
+XAUTH=$(ls /run/user/1000/xauth_* 2>/dev/null | head -1)
+[ -n "$XAUTH" ] && export XAUTHORITY="$XAUTH"
+
+# --- the neural-rendering stack -------------------------------------------------------------
+if [ -d "$DIR/linux" ] && [ -f "$DIR/linux/libdlss5nr_hip_bridge.so" ]; then
+    export DLSSNR_HIP_LIB="${DLSSNR_HIP_LIB:-/opt/rocm/lib/libamdhip64.so.7}"
+    export LD_LIBRARY_PATH="$DIR/linux${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    export LD_PRELOAD="libdlss5nr_hip_bridge.so${LD_PRELOAD:+:$LD_PRELOAD}"
+    export PROTON_DISABLE_NVAPI=1
+    export WINEDLLOVERRIDES="nvcuda=n;dxgi=n,b${WINEDLLOVERRIDES:+;$WINEDLLOVERRIDES}"
+    echo "[sophia-nr] neural stack: bridge + $DLSSNR_HIP_LIB" | tee -a "$LOG"
+else
+    echo "[sophia-nr] no linux/ bridge in $DIR — launching plain" | tee -a "$LOG"
+    export WINEDLLOVERRIDES="dxgi=n,b"
+fi
+
+export MESA_VK_DEVICE_SELECT="1002:7550!"     # render on the 9070 XT, never the FE or MI25
+export PROTON_FSR4_UPGRADE="${PROTON_FSR4_UPGRADE:-1}"
+
+cd "$DIR" || exit 1
+echo "[sophia-nr] $(date '+%F %T') $EXE in $DIR" | tee -a "$LOG"
+"$PROTON" waitforexitandrun "$DIR/$EXE" 2>&1 | tee -a "$LOG"
+echo "[sophia-nr] exited: ${PIPESTATUS[0]}" | tee -a "$LOG"

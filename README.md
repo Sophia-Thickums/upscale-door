@@ -11,6 +11,24 @@ override.
 ./upscale-door.py verify    <game-dir>
 ```
 
+## What's in here
+
+| file | what it is |
+|---|---|
+| `upscale-door.py` | the installer: `fetch`, `doctor`, `install`, `uninstall`, `verify` |
+| `sophia-nr` | the same stack for **non-Steam** games: a Proton launcher that preloads the HIP bridge and sets the overrides `launch.sh` would set from Steam |
+| `docs/PER-GAME-MATRIX.md` | what worked, what didn't, and why — three games working, three walls with named causes |
+| `docs/FINDINGS.md` | the full investigation, attempt by attempt, including the two dead ends worth not repeating |
+
+## Replicating this
+
+1. `./upscale-door.py fetch` — downloads AMDNR's release and verifies its published SHA-256.
+2. `./upscale-door.py doctor <game-dir>` — says whether the game can be set up at all (it refuses when
+   there is no signed `nvngx_dlss.dll` to use as the provider).
+3. `./upscale-door.py install <game-dir>`.
+4. Launch option in Steam: `WINEDLLOVERRIDES="dxgi=n,b" %command%`.
+5. In game: pick DLSS at a quality **below Native** — a 1:1 request gives the upscaler nothing to do.
+
 ## What this actually does — and the trick is not what anyone expects
 
 It makes **DLSS appear in a game's own graphics menu on an AMD card**, and puts **FSR 4** behind it.
