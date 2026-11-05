@@ -28,9 +28,18 @@ Then ZLUDA's `cuInit` returns **801**, and the project's own troubleshooting tab
 > "cuInit failed: 801" — the bridge could not load `libamdhip64.so.7` (not installed, or **not visible in
 > Steam's container**)
 
-It *is* installed: `rocminfo` reports `gfx1201 · AMD Radeon RX 9070 XT`, and the bridge loads it natively
-(`loaded; 1 of 110 functions missing`). Inside Steam's pressure-vessel container it is not visible, and
-`STEAM_COMPAT_MOUNTS` / an explicit `DLSSNR_HIP_LIB` did not make it so. That is the single remaining gate.
+**CORRECTION, made the same hour:** the container is *not* the problem. Read from the running game's own
+namespace, `/proc/<pid>/root/opt/rocm/lib/libamdhip64.so.7` resolves — `/opt` is mounted inside it. And the
+one function the bridge reports missing (`hipExternalMemoryGetMappedMipmappedArray`) is **declared in ROCm
+7.2.4's headers but exported by no library**, i.e. normal for this install, not a symptom.
+
+So the honest state is: **cause not yet identified.** What is ruled out: the library's presence, the container's
+mounts, the GPU (gfx1201 is supported and seen by ROCm), the model build (310.9.16.0), and the preload (the
+launcher sets it, and the failure message changed from "no handle file" to `cuInit` once it did).
+
+What is left, untested: the difference between a game launched by **Steam** (inside pressure-vessel) and one
+launched by **Proton directly** — the two have different namespaces even though `/opt` is visible. Testing
+that requires one more launch, which Ryan has ruled out, so it stays open rather than guessed at.
 
 **2. FANCY build in Atomic Heart.** Black screen with our proxy mapped and the card idle at 10 %: the hook
 takes the swapchain and never presents. Door-independent (tried `dxgi.dll` and `winmm.dll`). PLAIN is stable
