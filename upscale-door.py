@@ -315,6 +315,9 @@ def cmd_verify(d: Path) -> int:
 
 
 def main(argv):
+    # `fetch` needs no game directory, so it is dispatched before the arity check.
+    if len(argv) >= 2 and argv[1] == "fetch":
+        return cmd_fetch()
     if len(argv) < 3:
         print(__doc__)
         return 2
