@@ -99,6 +99,17 @@ ANTICHEAT = [
     "vanguard", "vgc", "vgk", "ricochet", "faceit", "mhyprot", "sguard", "punkbuster",
 ]
 
+# ★ WHAT THE MATRIX TAUGHT US, AS A RULE RATHER THAN A DOC A HUMAN HAS TO READ.
+# A tool that knows which combinations a human already proved wrong is worth more than one that says
+# "install succeeded" and leaves the black screen to the user. Keyed by exe name because that is what the
+# evidence is keyed to.
+KNOWN = {
+    "atomicheart-win64-shipping.exe": "the fancy build (dlss5-nr-amd-custom) black-screens this game on BOTH "
+                                      "doors (dxgi.dll and winmm.dll); the plain build is stable",
+    "gwt.exe": "the fancy build works here; neural rendering still stops at ZLUDA cuInit",
+    "control_dx12.exe": "plain build; DLSS had to be unlocked with a signed nvngx.dll first",
+}
+
 NOT_THE_GAME = ("vc_redist", "dxsetup", "dxwebsetup", "ue4prereqsetup", "ue5prereqsetup",
                 "dotnet", "oalinst", "vcredist", "crashreport", "uninstall", "setup")
 
@@ -147,7 +158,9 @@ def is_ours(p: Path) -> bool:
 
 def signed_dlss(d: Path):
     """The signed DLSS runtime that doubles as nvngx.dll: the largest nvngx_dlss.dll in the folder."""
-    cands = list(d.rglob("nvngx_dlss.dll"))
+    # Prefer the GAME's own copy: the fancy package ships its own nvngx_dlss.dll inside OptiScaler/dlss5nr,
+    # and using that as the provider works but is not the file the game itself was tested with.
+    cands = [p for p in d.rglob("nvngx_dlss.dll") if "optiscaler" not in str(p).lower()]
     return max(cands, key=lambda p: p.stat().st_size) if cands else None
 
 
@@ -178,6 +191,11 @@ def cmd_doctor(d: Path) -> int:
         else:
             gfx = sorted(a for a in api if a.startswith(("d3d11", "d3d12", "dxgi", "vulkan")))
             print(f"graphics imports: {', '.join(gfx) if gfx else 'none — not a D3D title?'}")
+
+    if found:
+        note = KNOWN.get(found[0].name.lower())
+        if note:
+            print(f"known: {note}")
 
     sgn = signed_dlss(d)
     print(f"signed provider for nvngx.dll: "
